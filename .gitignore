@@ -34,3 +34,12 @@ Thumbs.db
 .env
 config_local.py
 secrets/
+
+# Storage directories
+cache/*
+!cache/.gitkeep
+files/*
+!files/.gitkeep
+
+# Ollama
+.ollama/
