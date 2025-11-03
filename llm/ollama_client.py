@@ -45,7 +45,7 @@ class OllamaLLM:
             print(f"[OllamaLLM] Make sure Ollama is running: ollama serve")
             raise ConnectionError(f"Cannot connect to Ollama: {e}")
     
-    def process_query(self, user_query: str, tools: Optional[List[Dict]] = None) -> Dict[str, Any]:
+    async def process_query(self, user_query: str, tools: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
         Process user query with Ollama
         
@@ -84,7 +84,7 @@ class OllamaLLM:
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=30
+                timeout=120
             )
             response.raise_for_status()
             
@@ -97,7 +97,7 @@ class OllamaLLM:
             # Check if LLM wants to use a tool
             if "tool_calls" in message:
                 print(f"🤖 Ollama wants to use tools!\n")
-                return self._handle_tool_calls(message["tool_calls"], user_query)
+                return await self._handle_tool_calls(message["tool_calls"], user_query)
             else:
                 # Regular text response
                 text_response = message.get("content", "")
@@ -115,7 +115,7 @@ class OllamaLLM:
             print(f" Error communicating with Ollama: {e}")
             return {"error": str(e)}
     
-    def _handle_tool_calls(self, tool_calls: List[Dict], user_query: str) -> Dict[str, Any]:
+    async def _handle_tool_calls(self, tool_calls: List[Dict], user_query: str) -> Dict[str, Any]:
         """
         Handle tool calls from Ollama
         
@@ -147,7 +147,7 @@ class OllamaLLM:
             # Call MCP tool via client
             try:
                 print(f" Calling MCP Server...")
-                tool_result = self.mcp_client.call_tool(tool_name, arguments)
+                tool_result = await self.mcp_client.call_tool(tool_name, arguments)
                 
                 print(f" MCP Server Response:")
                 print(f"   {json.dumps(tool_result, indent=2)}\n")

@@ -105,11 +105,12 @@ class StorageManager:
         Path traversal possible: ../../.ssh/authorized_keys
         """
         try:
-            # VULNERABLE: Directly use user-provided path
-            full_path = self.files_dir / filepath
+            # VULNERABLE: Directly use user-provided path and resolve it
+            # This ensures path traversal actually escapes the files directory
+            full_path = (self.files_dir / filepath).resolve()
             
             print(f"[Files] WRITE: {filepath}")
-            print(f"  Full path: {full_path.absolute()}")
+            print(f"  Full path: {full_path}")
             
             # Create parent directories if needed
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -117,7 +118,7 @@ class StorageManager:
             # Write file (no validation!)
             full_path.write_text(content)
             
-            print(f"  ✓ Written {len(content)} bytes")
+            print(f"  [OK] Written {len(content)} bytes")
             return True
             
         except Exception as e:
@@ -132,17 +133,18 @@ class StorageManager:
         Can read arbitrary files on system
         """
         try:
-            full_path = self.files_dir / filepath
+            # VULNERABLE: Resolve path to allow traversal outside files directory
+            full_path = (self.files_dir / filepath).resolve()
             
             print(f"[Files] READ: {filepath}")
-            print(f"  Full path: {full_path.absolute()}")
+            print(f"  Full path: {full_path}")
             
             if full_path.exists():
                 content = full_path.read_text()
-                print(f"  ✓ Read {len(content)} bytes")
+                print(f"  [OK] Read {len(content)} bytes")
                 return content
             else:
-                print(f"  ✗ File not found")
+                print(f"  [ERROR] File not found")
                 return None
                 
         except Exception as e:
