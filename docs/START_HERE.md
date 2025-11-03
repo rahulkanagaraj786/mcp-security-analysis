@@ -63,7 +63,7 @@ Run all forward attacks automatically through Ollama:
 ```bash
 cd /cis_project/mcp_security_project
 source venv_mcp/bin/activate
-python attack_demonstrations.py
+python demo/attack_demonstrations.py
 ```
 
 This script will:
@@ -79,7 +79,7 @@ Interact with the system through natural language queries:
 ```bash
 cd /cis_project/mcp_security_project
 source venv_mcp/bin/activate
-python interactive_ollama_demo.py
+python demo/interactive_ollama_demo.py
 ```
 
 This provides an interactive chat interface where you can:
@@ -254,24 +254,24 @@ bash quick_start.sh
 ```bash
 # Automated attack demonstrations
 source venv_mcp/bin/activate
-python attack_demonstrations.py
+python demo/attack_demonstrations.py
 
 # Interactive demo
-python interactive_ollama_demo.py
+python demo/interactive_ollama_demo.py
 ```
 
 ### Project Files
 
-- `attack_demonstrations.py` - Automated attack scenarios (all forward attacks in one run)
-- `interactive_ollama_demo.py` - Interactive chat interface for testing
+- `demo/attack_demonstrations.py` - Automated attack scenarios (all forward attacks in one run)
+- `demo/interactive_ollama_demo.py` - Interactive chat interface for testing
 - `quick_start.sh` - Convenience menu for common tasks
 - `server/vulnerable_server.py` - MCP server with intentional vulnerabilities
 - `server/storage_manager.py` - Storage layer with path traversal and cache vulnerabilities
 
 ## Next Steps
 
-1. **Run automated demonstrations**: `python attack_demonstrations.py`
-2. **Try interactive testing**: `python interactive_ollama_demo.py`
+1. **Run automated demonstrations**: `python demo/attack_demonstrations.py`
+2. **Try interactive testing**: `python demo/interactive_ollama_demo.py`
 3. **Study the vulnerabilities**: Review `server/vulnerable_server.py` and `server/storage_manager.py`
 4. **Study the defense mechanisms**: Check `defenses/` directory (to be implemented)
 5. **Experiment with attacks**: Use the interactive demo to try different payloads

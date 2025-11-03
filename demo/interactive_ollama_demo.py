@@ -14,8 +14,8 @@ import sys
 import json
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent
+# Add project root to path (go up one level from demo/ to project root)
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from mcp import ClientSession, StdioServerParameters
@@ -34,10 +34,14 @@ class MCPClientWrapper:
         
     async def initialize(self):
         """Initialize connection to MCP server"""
+        # Get project root directory (one level up from demo/)
+        project_root = Path(__file__).parent.parent
+        
         self.server_params = StdioServerParameters(
             command="python",
             args=["-m", "server.vulnerable_server"],
-            env=None
+            env=None,
+            cwd=str(project_root)
         )
         
         # Create the client transport - store context manager

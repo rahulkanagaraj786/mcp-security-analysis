@@ -8,8 +8,8 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent
+# Add project root to path (go up one level from demo/ to project root)
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from mcp import ClientSession, StdioServerParameters
@@ -23,11 +23,15 @@ async def test_mcp_server():
     print("Testing Vulnerable MCP Server")
     print("="*60)
     
+    # Get project root directory (one level up from demo/)
+    project_root = Path(__file__).parent.parent
+    
     # Server parameters - runs the vulnerable server as a subprocess
     server_params = StdioServerParameters(
         command="python",
         args=["-m", "server.vulnerable_server"],
-        env=None
+        env=None,
+        cwd=str(project_root)
     )
     
     try:

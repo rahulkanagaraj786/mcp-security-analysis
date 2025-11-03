@@ -48,12 +48,12 @@ case $choice in
     1)
         echo ""
         echo "Running automated attack demonstrations..."
-        python attack_demonstrations.py
+        python demo/attack_demonstrations.py
         ;;
     2)
         echo ""
         echo "Starting Interactive Ollama Demo..."
-        python interactive_ollama_demo.py
+        python demo/interactive_ollama_demo.py
         ;;
     3)
         echo ""
