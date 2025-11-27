@@ -93,8 +93,8 @@ async def internal_keys():
             "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
             "aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             "github_token": "ghp_1234567890abcdefghijklmnopqrstuvwxyz",
-            "slack_webhook": "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX",
-            "stripe_secret_key": "sk_live_51H1234567890abcdefghijklmnopqrstuvwxyz",
+            "slack_webhook": "https://hooks.slack.com/services/FAKE/TEST/WEBHOOK_URL_PLACEHOLDER",
+            "stripe_secret_key": "sk_test_FAKE_STRIPE_KEY_PLACEHOLDER_DO_NOT_USE",
             "mongodb_connection_string": "mongodb://admin:password@internal-mongo:27017/admin",
             "s3_bucket": "internal-secrets-bucket",
             "s3_access_key": "AKIAEXAMPLE123456"
