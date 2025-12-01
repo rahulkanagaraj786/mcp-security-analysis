@@ -29,7 +29,7 @@ class SecureMCPClient:
     using the prompt injection detector before passing them to the MCP server.
     """
     
-    def __init__(self, base_mcp_client, strict_mode: bool = True):
+    def __init__(self, base_mcp_client, strict_mode: bool = True, base_directory: str = "files"):
         """
         Initialize the secure MCP client wrapper.
         
@@ -37,13 +37,16 @@ class SecureMCPClient:
             base_mcp_client: The underlying MCP client to wrap
             strict_mode: If True, blocks suspicious tool calls.
                         If False, only logs warnings.
+            base_directory: Base directory for file operations (for path sanitization)
         """
         self.base_client = base_mcp_client
-        self.detector = PromptInjectionDetector(strict_mode=strict_mode)
+        self.detector = PromptInjectionDetector(strict_mode=strict_mode, base_directory=base_directory)
         self.strict_mode = strict_mode
+        self.base_directory = base_directory
         
         print(f"[SecureMCPClient] Initialized with strict_mode={strict_mode}")
         print(f"[SecureMCPClient] Prompt injection protection enabled")
+        print(f"[SecureMCPClient] Path traversal protection enabled (base_directory={base_directory})")
     
     async def call_tool(self, tool_name: str, arguments: dict) -> dict:
         """
@@ -122,16 +125,17 @@ class SecureMCPClient:
         self.detector.reset()
 
 
-def create_secure_mcp_client_wrapper(base_client, strict_mode: bool = True) -> SecureMCPClient:
+def create_secure_mcp_client_wrapper(base_client, strict_mode: bool = True, base_directory: str = "files") -> SecureMCPClient:
     """
     Create a secure wrapper around an existing MCP client.
     
     Args:
         base_client: The MCP client to wrap
         strict_mode: If True, blocks suspicious tool calls
+        base_directory: Base directory for file operations (for path sanitization)
         
     Returns:
         SecureMCPClient instance
     """
-    return SecureMCPClient(base_client, strict_mode=strict_mode)
+    return SecureMCPClient(base_client, strict_mode=strict_mode, base_directory=base_directory)
 
