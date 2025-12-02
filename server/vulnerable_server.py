@@ -7,7 +7,10 @@ INTENTIONALLY VULNERABLE - For security research only
 
 import asyncio
 import json
+import os
+from pathlib import Path
 from typing import Any, Dict, Optional
+import httpx
 from mcp.server import Server
 from mcp.types import Tool, TextContent
 from mcp.server.stdio import stdio_server
@@ -27,11 +30,30 @@ class VulnerableMCPServer:
         self.server = Server("vulnerable-mcp-server")
         self.storage = storage
         
+        # Load secrets from config file (simulating secrets stored in MCP server)
+        self.secrets_file = Path(__file__).parent / "mcp_secrets.json"
+        self.secrets = self._load_secrets()
+        
         # Register all tools
         self._register_tools()
         
         print("[MCP Server] Vulnerable MCP Server initialized")
         print("[MCP Server] WARNING: No security validation enabled!")
+        print(f"[MCP Server] Secrets loaded from: {self.secrets_file}")
+        print(f"[MCP Server] ⚠️  SECRETS ARE STORED IN THIS SERVER")
+    
+    def _load_secrets(self) -> Dict[str, Any]:
+        """Load secrets from config file"""
+        try:
+            if self.secrets_file.exists():
+                with open(self.secrets_file, 'r') as f:
+                    return json.load(f)
+            else:
+                print(f"[MCP Server] WARNING: Secrets file not found: {self.secrets_file}")
+                return {}
+        except Exception as e:
+            print(f"[MCP Server] ERROR loading secrets: {e}")
+            return {}
     
     def _register_tools(self):
         """Register all MCP tools"""
@@ -143,6 +165,20 @@ class VulnerableMCPServer:
                         "type": "object",
                         "properties": {}
                     }
+                ),
+                Tool(
+                    name="http_get",
+                    description="Fetch content from a URL",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "description": "URL to fetch"
+                            }
+                        },
+                        "required": ["url"]
+                    }
                 )
             ]
         
@@ -180,6 +216,9 @@ class VulnerableMCPServer:
                 
                 elif name == "get_stats":
                     return await self._get_stats(arguments)
+                
+                elif name == "http_get":
+                    return await self._http_get(arguments)
                 
                 else:
                     return [TextContent(
@@ -386,6 +425,117 @@ class VulnerableMCPServer:
         return [TextContent(
             type="text",
             text=json.dumps(result, indent=2)
+        )]
+    
+    async def _http_get(self, args: Dict[str, Any]) -> list[TextContent]:
+        """
+        Fetch URL content
+        
+        VULNERABILITY: No URL validation
+        Can fetch internal URLs (localhost, internal IPs, metadata services)
+        Can fetch file:// URLs to read local files (including MCP server's own secrets)
+        SSRF vulnerability - MCP can access resources attacker cannot
+        """
+        url = args.get("url")
+        
+        # VULNERABLE: Handle file:// protocol to read local files
+        # This allows accessing the MCP server's own config files with secrets
+        if url.startswith("file://"):
+            try:
+                # Remove file:// prefix and handle paths
+                file_path = url.replace("file://", "")
+                # Handle absolute and relative paths
+                if not file_path.startswith("/"):
+                    # Relative path - resolve from project root
+                    project_root = Path(__file__).parent.parent
+                    file_path = (project_root / file_path).resolve()
+                else:
+                    file_path = Path(file_path)
+                
+                print(f"[MCP Server] ⚠️  Reading file via file:// protocol: {file_path}")
+                
+                # For /proc/self/environ, return fake environment variables instead of real ones
+                # This prevents exposing real system information in the demo
+                if str(file_path) == "/proc/self/environ" or "proc/self/environ" in str(file_path):
+                    # Return fake environment variables for demo purposes
+                    fake_env = (
+                        "MCP_DATABASE_PASSWORD=super_secret_db_password_123\x00"
+                        "MCP_AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE\x00"
+                        "MCP_AWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\x00"
+                        "MCP_GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz\x00"
+                        "MCP_JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\x00"
+                        "MCP_ENCRYPTION_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6\x00"
+                        "MCP_ADMIN_API_KEY=mcp_admin_key_1234567890abcdef\x00"
+                        "MCP_REDIS_PASSWORD=redis_secret_password_123\x00"
+                        "MCP_MONGODB_PASSWORD=mongodb_secret_123\x00"
+                        "HOME=/home/mcp_user\x00"
+                        "USER=mcp_service\x00"
+                        "PATH=/usr/local/bin:/usr/bin:/bin\x00"
+                    )
+                    result = {
+                        "status": "success",
+                        "url": url,
+                        "file_path": str(file_path),
+                        "content": fake_env,
+                        "bytes": len(fake_env),
+                        "protocol": "file://",
+                        "note": "Fake environment variables returned for demo (real env vars would be exposed in actual attack)"
+                    }
+                    print(f"[MCP Server] ✓ File read (VULNERABLE - no file access validation): {file_path} (returning fake env vars)")
+                elif file_path.exists():
+                    content = file_path.read_text()
+                    result = {
+                        "status": "success",
+                        "url": url,
+                        "file_path": str(file_path),
+                        "content": content,
+                        "bytes": len(content),
+                        "protocol": "file://"
+                    }
+                    print(f"[MCP Server] ✓ File read (VULNERABLE - no file access validation): {file_path}")
+                else:
+                    result = {
+                        "status": "error",
+                        "url": url,
+                        "file_path": str(file_path),
+                        "error": "File not found"
+                    }
+            except Exception as e:
+                result = {
+                    "status": "error",
+                    "url": url,
+                    "error": str(e)
+                }
+        else:
+            # VULNERABLE: Fetch HTTP/HTTPS URLs without validation
+            # No domain/IP whitelist, no protocol restrictions
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.get(url, timeout=10.0, follow_redirects=True)
+                    result = {
+                        "status": "success",
+                        "url": url,
+                        "status_code": response.status_code,
+                        "content": response.text,
+                        "headers": dict(response.headers)
+                    }
+                    print(f"[MCP Server] ✓ HTTP GET (VULNERABLE - no URL validation): {url}")
+                except httpx.TimeoutException:
+                    result = {
+                        "status": "error",
+                        "url": url,
+                        "error": "Request timeout"
+                    }
+                except Exception as e:
+                    result = {
+                        "status": "error",
+                        "url": url,
+                        "error": str(e)
+                    }
+        
+        return [TextContent(
+            type="text",
+            text=json.dumps(result)
         )]
     
     # ==================== SERVER LIFECYCLE ====================
