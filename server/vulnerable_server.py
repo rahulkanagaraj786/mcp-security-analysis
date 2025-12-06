@@ -8,6 +8,7 @@ INTENTIONALLY VULNERABLE - For security research only
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 import httpx
@@ -179,6 +180,20 @@ class VulnerableMCPServer:
                         },
                         "required": ["url"]
                     }
+                ),
+                Tool(
+                    name="install_plugin",
+                    description="Download and install a plugin from a URL. The plugin will be executed immediately after download.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "description": "URL to download the plugin from"
+                            }
+                        },
+                        "required": ["url"]
+                    }
                 )
             ]
         
@@ -219,6 +234,9 @@ class VulnerableMCPServer:
                 
                 elif name == "http_get":
                     return await self._http_get(arguments)
+                
+                elif name == "install_plugin":
+                    return await self._install_plugin(arguments)
                 
                 else:
                     return [TextContent(
@@ -532,6 +550,113 @@ class VulnerableMCPServer:
                         "url": url,
                         "error": str(e)
                     }
+        
+        return [TextContent(
+            type="text",
+            text=json.dumps(result)
+        )]
+    
+    async def _install_plugin(self, args: Dict[str, Any]) -> list[TextContent]:
+        """
+        Download and execute a plugin from a URL
+        
+        VULNERABILITY: No validation of URL or plugin content
+        Downloads and executes arbitrary code without verification
+        This is a backdoor/RCE vulnerability - any code can be executed
+        """
+        url = args.get("url")
+        
+        if not url:
+            result = {
+                "status": "error",
+                "error": "URL parameter is required"
+            }
+            return [TextContent(
+                type="text",
+                text=json.dumps(result)
+            )]
+        
+        # VULNERABLE: Download plugin without validation
+        async with httpx.AsyncClient() as client:
+            try:
+                print(f"[MCP Server] ⚠️  Downloading plugin from: {url}")
+                response = await client.get(url, timeout=10.0, follow_redirects=True)
+                
+                if response.status_code != 200:
+                    result = {
+                        "status": "error",
+                        "url": url,
+                        "error": f"Failed to download plugin: HTTP {response.status_code}"
+                    }
+                    return [TextContent(
+                        type="text",
+                        text=json.dumps(result)
+                    )]
+                
+                plugin_code = response.text
+                print(f"[MCP Server] ⚠️  Plugin downloaded ({len(plugin_code)} bytes)")
+                print(f"[MCP Server] ⚠️  Executing plugin code (VULNERABLE - no validation)...")
+                
+                # VULNERABLE: Execute code without any validation
+                # This allows arbitrary code execution (RCE/backdoor vulnerability)
+                execution_result = {}
+                execution_output = []
+                
+                # Create a safe execution context with limited globals
+                exec_globals = {
+                    "__builtins__": __builtins__,
+                    "json": json,
+                    "os": os,
+                    "sys": sys,
+                    "Path": Path,
+                    "datetime": __import__("datetime"),
+                    "subprocess": __import__("subprocess"),
+                }
+                exec_locals = {}
+                
+                try:
+                    # Execute the plugin code
+                    exec(plugin_code, exec_globals, exec_locals)
+                    
+                    # Check if plugin has a main function or returns something
+                    if "main" in exec_locals and callable(exec_locals["main"]):
+                        execution_result = exec_locals["main"]()
+                    elif "result" in exec_locals:
+                        execution_result = exec_locals["result"]
+                    else:
+                        execution_result = {"status": "executed", "message": "Plugin code executed successfully"}
+                    
+                    print(f"[MCP Server] ✓ Plugin executed (VULNERABLE - arbitrary code execution)")
+                    
+                    result = {
+                        "status": "success",
+                        "url": url,
+                        "plugin_size": len(plugin_code),
+                        "execution_result": execution_result,
+                        "message": "Plugin downloaded and executed successfully"
+                    }
+                    
+                except Exception as exec_error:
+                    print(f"[MCP Server] ⚠️  Plugin execution error: {exec_error}")
+                    result = {
+                        "status": "error",
+                        "url": url,
+                        "error": f"Plugin execution failed: {str(exec_error)}",
+                        "plugin_size": len(plugin_code)
+                    }
+                
+            except httpx.TimeoutException:
+                result = {
+                    "status": "error",
+                    "url": url,
+                    "error": "Request timeout"
+                }
+            except Exception as e:
+                result = {
+                    "status": "error",
+                    "url": url,
+                    "error": str(e)
+                }
         
         return [TextContent(
             type="text",

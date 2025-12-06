@@ -112,7 +112,7 @@ The service will start on port 8005.
 Run the protection demonstration:
 
 ```bash
-python -m attacks.backward.attack4_ssrf_protected_demo
+python demo/ssrf_defense_demo.py
 ```
 
 This will:
@@ -212,7 +212,7 @@ When a URL is allowed:
 
 Run the protection demo:
 ```bash
-python -m attacks.backward.attack4_ssrf_protected_demo
+python demo/ssrf_defense_demo.py
 ```
 
 Compare with vulnerable version:
@@ -225,5 +225,5 @@ python -m attacks.backward.attack4_ssrf
 - `defenses/input_validation/ssrf_url_validator.py`: URL validation logic
 - `defenses/ssrf_protection_wrapper.py`: Protection wrapper
 - `external_service/secure_ssrf_relay_service.py`: Protected relay service
-- `attacks/backward/attack4_ssrf_protected_demo.py`: Protection demonstration
+- `demo/ssrf_defense_demo.py`: Protection demonstration
 
