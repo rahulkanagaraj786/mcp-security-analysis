@@ -285,3 +285,4 @@ def create_content_sanitizer(strict_mode: bool = True, sanitize_output: bool = T
     """
     return ContentSanitizer(strict_mode=strict_mode, sanitize_output=sanitize_output)
 
+
