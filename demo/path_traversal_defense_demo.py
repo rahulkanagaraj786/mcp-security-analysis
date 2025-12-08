@@ -129,7 +129,7 @@ async def run_attack_scenario(ollama_llm, attack_scenario, tools, mode="vulnerab
     """Run a single attack scenario"""
     print(f"\n{'='*80}")
     print(f"[ATTACK #{attack_scenario.get('number', '?')}] {attack_scenario['name']}")
-    print(f"[MODE] {'🔴 VULNERABLE' if mode == 'vulnerable' else '🛡️  PROTECTED'}")
+    print(f"[MODE] {'VULNERABLE' if mode == 'vulnerable' else 'PROTECTED'}")
     print(f"{'='*80}")
     print(f"Description: {attack_scenario['description']}")
     print(f"\n[USER QUERY]")
@@ -145,11 +145,11 @@ async def run_attack_scenario(ollama_llm, attack_scenario, tools, mode="vulnerab
     print(f"{'─'*80}")
     
     if result.get("type") == "tool_use":
-        print(f"✓ Attack triggered tool calls\n")
+        print("Attack triggered tool calls\n")
         for tool_call in result['tool_calls']:
             # Check if blocked by security
             if tool_call.get('result', {}).get('blocked'):
-                status = "⛔ BLOCKED"
+                status = "BLOCKED"
                 print(f"  Tool: {tool_call['tool']}")
                 print(f"  Status: {status}")
                 print(f"  Security: {tool_call['result'].get('message', 'Blocked by security wrapper')}")
@@ -159,7 +159,7 @@ async def run_attack_scenario(ollama_llm, attack_scenario, tools, mode="vulnerab
                         print(f"  Path Traversal: DETECTED AND BLOCKED")
                         print(f"  Original Path: {metadata.get('original_path', 'unknown')}")
             elif tool_call.get('success'):
-                status = "✓ SUCCESS"
+                status = "SUCCESS"
                 print(f"  Tool: {tool_call['tool']}")
                 print(f"  Status: {status}")
                 print(f"  Arguments: {json.dumps(tool_call['arguments'], indent=4)}")
@@ -167,8 +167,8 @@ async def run_attack_scenario(ollama_llm, attack_scenario, tools, mode="vulnerab
                 # Check for path traversal in successful calls
                 filepath = tool_call.get('arguments', {}).get('filepath', '')
                 if '..' in str(filepath) or str(filepath).startswith('/'):
-                    print(f"  ⚠️  PATH TRAVERSAL DETECTED in request")
-                    print(f"  ⚠️  This indicates the vulnerability was exploited")
+                    print("  PATH TRAVERSAL DETECTED in request")
+                    print("  This indicates the vulnerability was exploited")
                 
                 if 'result' in tool_call and 'error' not in tool_call.get('result', {}):
                     result_data = tool_call['result']
@@ -185,7 +185,7 @@ async def run_attack_scenario(ollama_llm, attack_scenario, tools, mode="vulnerab
                     else:
                         print(f"  Result: {json.dumps(result_data, indent=4)}")
             else:
-                status = "✗ FAILED"
+                status = "FAILED"
                 print(f"  Tool: {tool_call['tool']}")
                 print(f"  Status: {status}")
                 if 'error' in tool_call:
@@ -198,11 +198,11 @@ async def run_attack_scenario(ollama_llm, attack_scenario, tools, mode="vulnerab
         blocked_tools = [tc for tc in result['tool_calls'] if tc.get('result', {}).get('blocked')]
         
         if blocked_tools:
-            print(f"  🛡️  PROTECTED: {len(blocked_tools)} tool call(s) were blocked by security wrapper")
-            print(f"  ✅ The path traversal attack was successfully prevented!")
-            print(f"  ✅ Path sanitization detected and blocked malicious paths")
+            print(f"  PROTECTED: {len(blocked_tools)} tool call(s) were blocked by security wrapper")
+            print("  The path traversal attack was successfully prevented")
+            print("  Path sanitization detected and blocked malicious paths")
         elif successful_tools:
-            print(f"  ⚠️  VULNERABLE: {len(successful_tools)} tool call(s) executed successfully")
+            print(f"  VULNERABLE: {len(successful_tools)} tool call(s) executed successfully")
             
             # Check if path traversal was used
             traversal_used = False
@@ -213,18 +213,18 @@ async def run_attack_scenario(ollama_llm, attack_scenario, tools, mode="vulnerab
                     break
             
             if traversal_used:
-                print(f"  ⚠️  PATH TRAVERSAL SUCCESSFUL - File accessed outside allowed directory")
-                print(f"  ⚠️  The server allowed access to files outside the files/ directory")
-                print(f"  ⚠️  This demonstrates the vulnerability: paths were not validated")
+                print("  PATH TRAVERSAL SUCCESSFUL - File accessed outside allowed directory")
+                print("  The server allowed access to files outside the files/ directory")
+                print("  This demonstrates the vulnerability: paths were not validated")
             else:
-                print(f"  ⚠️  Tools executed, but path traversal may not have been attempted")
+                print("  Tools executed, but path traversal may not have been attempted")
         else:
-            print(f"  ℹ️  No tools were successfully called")
+            print("  No tools were successfully called")
     else:
         text_response = result.get('response', 'No response')
         print(f"LLM Response: {text_response}\n")
         print(f"[ANALYSIS]")
-        print(f"  ℹ️  LLM provided a text response instead of using tools")
+        print("  LLM provided a text response instead of using tools")
     
     print(f"{'─'*80}")
     await asyncio.sleep(1)
@@ -256,10 +256,10 @@ async def demonstrate_vulnerable_system():
     print(f"\n{'='*80}")
     print("  [PART 1 SUMMARY] Vulnerable System")
     print("="*80)
-    print("✓ Attacks succeeded - system is vulnerable")
-    print("✓ Path traversal attacks accessed files outside allowed directory")
-    print("✓ No security protection was in place")
-    print("✓ Server used .resolve() without checking if path stays within base directory")
+    print("Attacks succeeded - system is vulnerable")
+    print("Path traversal attacks accessed files outside allowed directory")
+    print("No security protection was in place")
+    print("Server used .resolve() without checking if path stays within base directory")
     print("="*80 + "\n")
     
     await mcp_client.cleanup()
@@ -300,14 +300,14 @@ async def demonstrate_protected_system():
     print(f"\n{'='*80}")
     print("  [PART 2 SUMMARY] Protected System")
     print("="*80)
-    print(f"🛡️  Security Wrapper Status: ACTIVE")
-    print(f"⛔ Blocked Tool Calls: {security_summary['blocked_calls']}")
-    print(f"⚠️  Warnings: {security_summary['warnings']}")
-    print(f"🔒 Blocked Tools: {', '.join(security_summary['blocked_tools']) if security_summary['blocked_tools'] else 'None'}")
-    print("\n✓ Attacks were blocked - system is protected")
-    print("✓ Path traversal attacks were prevented")
-    print("✓ Path sanitization successfully validated all file paths")
-    print("✓ Security wrapper blocked paths containing '..' or absolute paths")
+    print("Security Wrapper Status: ACTIVE")
+    print(f"Blocked Tool Calls: {security_summary['blocked_calls']}")
+    print(f"Warnings: {security_summary['warnings']}")
+    print(f"Blocked Tools: {', '.join(security_summary['blocked_tools']) if security_summary['blocked_tools'] else 'None'}")
+    print("\nAttacks were blocked - system is protected")
+    print("Path traversal attacks were prevented")
+    print("Path sanitization successfully validated all file paths")
+    print("Security wrapper blocked paths containing '..' or absolute paths")
     print("="*80 + "\n")
     
     await secure_mcp_client.cleanup()
@@ -352,20 +352,20 @@ async def main():
     print("\n" + "="*80)
     print("  [FINAL COMPARISON]")
     print("="*80)
-    print("\n📊 Results Comparison:")
-    print("\n🔴 VULNERABLE SYSTEM:")
+    print("\nResults Comparison:")
+    print("\nVULNERABLE SYSTEM:")
     print("   • Attacks succeeded")
     print("   • Files accessed outside allowed directory")
     print("   • Path traversal sequences (../) were not blocked")
     print("   • Absolute paths were accepted")
     print("   • No path validation in place")
-    print("\n🛡️  PROTECTED SYSTEM:")
+    print("\nPROTECTED SYSTEM:")
     print("   • Attacks were blocked")
     print("   • Path sanitization validated all file paths")
     print("   • Paths containing '..' were detected and blocked")
     print("   • Absolute paths were blocked")
     print("   • Security wrapper prevented path traversal")
-    print("\n✅ Conclusion:")
+    print("\nConclusion:")
     print("   The security wrapper successfully protects against path traversal attacks")
     print("   by validating and sanitizing file paths before they reach the MCP server.")
     print("   Path sanitization ensures all file operations stay within the allowed directory.")

@@ -67,7 +67,7 @@ class SecureMCPClient:
         
         if not is_allowed:
             # Tool call is blocked
-            print(f"\n[SECURITY] ⛔ BLOCKED tool call: {tool_name}")
+            print(f"\n[SECURITY] BLOCKED tool call: {tool_name}")
             print(f"[SECURITY] Reason: {message}")
             print(f"[SECURITY] Arguments: {json.dumps(arguments, indent=2)}")
             

@@ -214,8 +214,8 @@ async def run_backdoor_attack(mcp_client, attack_scenario):
             print(f"\n[INFO] Attack attempted but plugin execution failed")
             print(f"[ERROR] {result.get('error', 'Unknown error')}")
         elif result.get("status") == "success":
-            print(f"\n[SUCCESS] ⚠️  BACKDOOR ATTACK SUCCESSFUL!")
-            print(f"[SUCCESS] Malicious plugin was downloaded and executed on the MCP server")
+            print(f"\n[SUCCESS] BACKDOOR ATTACK SUCCESSFUL")
+            print("[SUCCESS] Malicious plugin was downloaded and executed on the MCP server")
             
             # Check if marker file was created (proves code execution)
             if marker_file and marker_file.exists():
@@ -318,7 +318,7 @@ async def run_all_backdoor_attacks():
     if successful_attacks:
         print(f"\n  Successful Backdoor Attacks:")
         for attack in successful_attacks:
-            print(f"    ✓ {attack['attack']}")
+            print(f"    - {attack['attack']}")
             print(f"      URL: {attack['url']}")
             print(f"      Marker file: {attack['marker_file']}")
     

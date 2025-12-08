@@ -99,7 +99,7 @@ class BackdoorProtectionWrapper:
             
             if not url:
                 self.blocked_count += 1
-                print(f"\n[BACKDOOR PROTECTION] ⛔ BLOCKED: URL parameter is required")
+                print(f"\n[BACKDOOR PROTECTION] BLOCKED: URL parameter is required")
                 return {
                     "error": "BACKDOOR_PROTECTION",
                     "message": "URL parameter is required",
@@ -112,7 +112,7 @@ class BackdoorProtectionWrapper:
             
             if not validation_result["valid"]:
                 self.blocked_count += 1
-                print(f"\n[BACKDOOR PROTECTION] ⛔ BLOCKED: {validation_result['reason']}")
+                print(f"\n[BACKDOOR PROTECTION] BLOCKED: {validation_result['reason']}")
                 print(f"[BACKDOOR PROTECTION] URL: {url}")
                 return {
                     "error": "BACKDOOR_PROTECTION",
@@ -131,7 +131,7 @@ class BackdoorProtectionWrapper:
             
             # URL passed validation, allow the request
             self.allowed_count += 1
-            print(f"\n[BACKDOOR PROTECTION] ✓ ALLOWED: Plugin URL passed validation")
+            print(f"\n[BACKDOOR PROTECTION] ALLOWED: Plugin URL passed validation")
             print(f"[BACKDOOR PROTECTION] Domain: {validation_result['domain']}")
             print(f"[BACKDOOR PROTECTION] Extension: {validation_result['extension']}")
             

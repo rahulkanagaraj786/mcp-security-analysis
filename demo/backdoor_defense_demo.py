@@ -185,22 +185,22 @@ async def test_protected_client(attack_scenario, protected_client):
         
         # Check if blocked
         if result.get("blocked") or result.get("error") == "BACKDOOR_PROTECTION":
-            print(f"\n[RESULT] ✅ PROTECTION WORKED - Attack was BLOCKED")
+            print(f"\n[RESULT] PROTECTION WORKED - Attack was BLOCKED")
             print(f"[RESULT] {result.get('message', 'Plugin installation blocked by protection')}")
             
             if attack_scenario['should_be_blocked']:
-                print(f"[SUCCESS] ✓ Correctly blocked malicious plugin URL")
+                print("[SUCCESS] Correctly blocked malicious plugin URL")
             else:
-                print(f"[WARNING] ⚠️  Blocked a URL that should have been allowed")
+                print("[WARNING] Blocked a URL that should have been allowed")
         else:
-            print(f"\n[RESULT] ❌ PROTECTION FAILED - Attack was ALLOWED")
+            print(f"\n[RESULT] PROTECTION FAILED - Attack was ALLOWED")
             print(f"[RESULT] Plugin installation was allowed (should have been blocked)")
             print(json.dumps(result, indent=2))
             
             if attack_scenario['should_be_blocked']:
-                print(f"[ERROR] ✗ Failed to block malicious plugin URL")
+                print("[ERROR] Failed to block malicious plugin URL")
             else:
-                print(f"[SUCCESS] ✓ Correctly allowed safe plugin URL")
+                print("[SUCCESS] Correctly allowed safe plugin URL")
         
     except Exception as e:
         print(f"\n[ERROR] Test failed with exception: {e}")

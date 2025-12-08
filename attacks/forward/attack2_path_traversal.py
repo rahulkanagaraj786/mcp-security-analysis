@@ -172,9 +172,9 @@ async def run_path_traversal_attack(ollama_llm, attack_scenario, tools):
     print(f"{'─'*80}")
     
     if result.get("type") == "tool_use":
-        print(f"✓ Attack triggered tool calls\n")
+        print("Attack triggered tool calls\n")
         for tool_call in result['tool_calls']:
-            status = "✓ SUCCESS" if tool_call.get('success') else "✗ FAILED"
+            status = "SUCCESS" if tool_call.get('success') else "FAILED"
             print(f"  Tool: {tool_call['tool']}")
             print(f"  Status: {status}")
             print(f"  Arguments: {json.dumps(tool_call['arguments'], indent=4)}")
@@ -188,7 +188,7 @@ async def run_path_traversal_attack(ollama_llm, attack_scenario, tools):
                     
                     # Check if path contains traversal
                     if '..' in str(filepath) or str(filepath).startswith('/'):
-                        print(f"  ⚠️  PATH TRAVERSAL DETECTED in request")
+                        print("  PATH TRAVERSAL DETECTED in request")
                     
                     # Show result (but truncate if too long)
                     if 'content' in result_data:
@@ -209,7 +209,7 @@ async def run_path_traversal_attack(ollama_llm, attack_scenario, tools):
         print(f"[ANALYSIS]")
         successful_tools = [tc for tc in result['tool_calls'] if tc.get('success')]
         if successful_tools:
-            print(f"  ⚠️  WARNING: {len(successful_tools)} tool call(s) executed successfully")
+        print(f"  WARNING: {len(successful_tools)} tool call(s) executed successfully")
             
             # Check if any successful call used path traversal
             traversal_detected = False
@@ -220,20 +220,20 @@ async def run_path_traversal_attack(ollama_llm, attack_scenario, tools):
                     break
             
             if traversal_detected:
-                print(f"  ⚠️  PATH TRAVERSAL SUCCESSFUL - File accessed outside allowed directory")
-                print(f"  ⚠️  This demonstrates the vulnerability: paths were not validated")
-                print(f"  ⚠️  The server allowed access to files outside the files/ directory")
+            print("  PATH TRAVERSAL SUCCESSFUL - File accessed outside allowed directory")
+            print("  This demonstrates the vulnerability: paths were not validated")
+            print("  The server allowed access to files outside the files/ directory")
             else:
-                print(f"  ℹ️  Tools executed, but path traversal may not have been attempted")
+            print("  INFO: Tools executed, but path traversal may not have been attempted")
         else:
-            print(f"  ℹ️  No tools were successfully called")
-            print(f"  ℹ️  The LLM may have resisted the attack, or the attack needs refinement")
+        print("  INFO: No tools were successfully called")
+        print("  INFO: The LLM may have resisted the attack, or the attack needs refinement")
     else:
         text_response = result.get('response', 'No response')
         print(f"LLM Response: {text_response}\n")
         print(f"[ANALYSIS]")
-        print(f"  ℹ️  LLM provided a text response instead of using tools")
-        print(f"  ℹ️  Check if the response contains any indication of path traversal awareness")
+    print("  INFO: LLM provided a text response instead of using tools")
+    print("  INFO: Check if the response contains any indication of path traversal awareness")
     
     print(f"{'─'*80}")
     
