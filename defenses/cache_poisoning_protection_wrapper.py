@@ -7,10 +7,10 @@ to prevent cache poisoning attacks.
 
 The wrapper validates content before allowing it to be stored in cache,
 blocking:
-- XSS payloads (script tags, event handlers, etc.)
-- Prompt injection patterns
-- SQL injection patterns
-- Other malicious content
+- Session hijacking patterns (session tokens, session IDs)
+- Data theft patterns (credential harvesting, data exfiltration)
+- Phishing patterns (fake security alerts, verification requests)
+- Sensitive data leakage patterns (API keys, passwords)
 
 It also sanitizes content when retrieved from cache (get_profile, get_note)
 to provide defense in depth.
@@ -37,10 +37,10 @@ class CachePoisoningProtectionWrapper:
     content when retrieved from cache (get_profile, get_note).
     
     It blocks:
-    - XSS payloads
-    - Prompt injection patterns
-    - SQL injection patterns
-    - Other malicious content
+    - Session hijacking patterns
+    - Data theft patterns
+    - Phishing patterns
+    - Sensitive data leakage patterns
     """
     
     # Tools that store content in cache (need input validation)

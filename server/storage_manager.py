@@ -23,7 +23,7 @@ class StorageManager:
     - No size limits (DoS possible)
     """
     
-    def __init__(self, cache_dir: str = "cache", files_dir: str = "files"):
+    def __init__(self, cache_dir: str = "cache", files_dir: str = "files", load_from_file: bool = True):
         self.cache: Dict[str, Any] = {}
         self.cache_dir = Path(cache_dir)
         self.files_dir = Path(files_dir)
@@ -32,11 +32,41 @@ class StorageManager:
         self.cache_dir.mkdir(exist_ok=True)
         self.files_dir.mkdir(exist_ok=True)
         
+        # Load cache from file if it exists (persist cache across server restarts)
+        if load_from_file:
+            self._load_cache_from_file()
+        
         print(f"[StorageManager] Initialized")
         print(f"  Cache dir: {self.cache_dir.absolute()}")
         print(f"  Files dir: {self.files_dir.absolute()}")
+        print(f"  Cache entries loaded: {len(self.cache)}")
     
     # ==================== CACHE OPERATIONS ====================
+    
+    def _load_cache_from_file(self) -> None:
+        """
+        Load cache from cache_contents.json file if it exists.
+        This allows cache to persist across server restarts.
+        """
+        cache_file = self.cache_dir / "cache_contents.json"
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    file_cache = json.load(f)
+                
+                # Convert file format to internal cache format
+                # File format: {"user_profile_1": {"user_id": 1, "bio": "..."}}
+                # Internal format: {"user_profile_1": {"value": {...}, "timestamp": "..."}}
+                for key, value in file_cache.items():
+                    self.cache[key] = {
+                        "value": value,
+                        "timestamp": datetime.now().isoformat()  # Use current time for loaded entries
+                    }
+                
+                print(f"[StorageManager] Loaded {len(self.cache)} cache entries from file")
+            except Exception as e:
+                print(f"[StorageManager] Warning: Could not load cache from file: {e}")
+                # Continue with empty cache if file is corrupted
     
     def set_cache(self, key: str, value: Any) -> bool:
         """
