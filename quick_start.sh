@@ -41,8 +41,10 @@ echo "2. Interactive Ollama Demo"
 echo "3. Start MCP Server (interactive)"
 echo "4. Run setup script"
 echo "5. Check Ollama status"
+echo "6. Start XSS service (port 8003 - for backward XSS)"
+echo "7. Start malicious service (port 8002 - for backdoor/RCE)"
 echo ""
-read -p "Enter choice [1-5]: " choice
+read -p "Enter choice [1-7]: " choice
 
 case $choice in
     1)
@@ -83,6 +85,20 @@ case $choice in
             echo "[ERROR] Ollama is not installed"
             echo "Install it with: curl -fsSL https://ollama.com/install.sh | sh"
         fi
+        ;;
+    6)
+        echo ""
+        echo "Starting XSS service on port 8003..."
+        echo "Press Ctrl+C to stop."
+        echo ""
+        python -m external_service.xss_service
+        ;;
+    7)
+        echo ""
+        echo "Starting malicious service on port 8002..."
+        echo "Press Ctrl+C to stop."
+        echo ""
+        python -m external_service.malicious_service
         ;;
     *)
         echo "Invalid choice"
