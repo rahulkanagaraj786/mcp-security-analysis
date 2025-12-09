@@ -70,8 +70,11 @@ class VulnerableMCPServer:
                         "type": "object",
                         "properties": {
                             "user_id": {
-                                "type": "integer",
-                                "description": "User ID"
+                                "oneOf": [
+                                    {"type": "integer"},
+                                    {"type": "string"}
+                                ],
+                                "description": "User ID (integer or string)"
                             },
                             "bio": {
                                 "type": "string",
@@ -124,8 +127,11 @@ class VulnerableMCPServer:
                         "type": "object",
                         "properties": {
                             "user_id": {
-                                "type": "integer",
-                                "description": "User ID"
+                                "oneOf": [
+                                    {"type": "integer"},
+                                    {"type": "string"}
+                                ],
+                                "description": "User ID (integer or string)"
                             }
                         },
                         "required": ["user_id"]
@@ -261,6 +267,12 @@ class VulnerableMCPServer:
         Can store XSS, prompt injection, etc.
         """
         user_id = args.get("user_id")
+        # Handle both string and integer user_id
+        if isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except (ValueError, TypeError):
+                pass
         bio = args.get("bio")
         
         # VULNERABLE: Store directly without validation
@@ -348,6 +360,12 @@ class VulnerableMCPServer:
         XSS, prompt injection served to clients
         """
         user_id = args.get("user_id")
+        # Handle both string and integer user_id
+        if isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except (ValueError, TypeError):
+                pass
         cache_key = f"user_profile_{user_id}"
         
         # VULNERABLE: Return without sanitization

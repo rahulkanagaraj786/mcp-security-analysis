@@ -56,10 +56,6 @@ class OllamaLLM:
         Returns:
             Dict with LLM response and any tool calls made
         """
-        print(f"\n{'='*60}")
-        print(f"👤 User Query: {user_query}")
-        print(f"{'='*60}\n")
-        
         # Add user message to history
         self.conversation_history.append({
             "role": "user",
@@ -76,11 +72,9 @@ class OllamaLLM:
         # Add tools if provided
         if tools:
             payload["tools"] = tools
-            print(f"🔧 Available tools: {[t['function']['name'] for t in tools]}\n")
         
         try:
             # Send to Ollama
-            print(f"🤖 Sending query to Ollama ({self.model})...")
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
@@ -96,12 +90,10 @@ class OllamaLLM:
             
             # Check if LLM wants to use a tool
             if "tool_calls" in message:
-                print(f"🤖 Ollama wants to use tools!\n")
                 return await self._handle_tool_calls(message["tool_calls"], user_query)
             else:
                 # Regular text response
                 text_response = message.get("content", "")
-                print(f"🤖 Ollama Response: {text_response}\n")
                 return {
                     "type": "text",
                     "response": text_response,
@@ -138,19 +130,11 @@ class OllamaLLM:
                 try:
                     arguments = json.loads(arguments)
                 except json.JSONDecodeError:
-                    print(f"⚠️  Could not parse arguments: {arguments}")
                     arguments = {}
-            
-            print(f"🔧 Tool Call: {tool_name}")
-            print(f"   Arguments: {json.dumps(arguments, indent=2)}\n")
             
             # Call MCP tool via client
             try:
-                print(f" Calling MCP Server...")
                 tool_result = await self.mcp_client.call_tool(tool_name, arguments)
-                
-                print(f" MCP Server Response:")
-                print(f"   {json.dumps(tool_result, indent=2)}\n")
                 
                 results.append({
                     "tool": tool_name,
