@@ -89,6 +89,7 @@ def main():
         ("SSRF Service", script_dir / "ssrf_service.py", 8001),
         ("RCE Service", script_dir / "rce_service.py", 8002),
         ("XSS Service", script_dir / "xss_service.py", 8003),
+        ("XSS Relay Service", script_dir / "xss_relay_service.py", 8004),
     ]
     
     # Start all services
@@ -108,9 +109,10 @@ def main():
     print(f"  {success_count}/{len(service_configs)} services started")
     print("="*70)
     print("\nServices running:")
-    print("  - SSRF Service:  http://127.0.0.1:8001")
-    print("  - RCE Service:   http://127.0.0.1:8002")
-    print("  - XSS Service:   http://127.0.0.1:8003")
+    print("  - SSRF Service:     http://127.0.0.1:8001")
+    print("  - RCE Service:       http://127.0.0.1:8002")
+    print("  - XSS Service:       http://127.0.0.1:8003")
+    print("  - XSS Relay Service: http://127.0.0.1:8004")
     print("\nPress Ctrl+C to stop all services")
     print("="*70 + "\n")
     
